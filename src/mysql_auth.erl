@@ -29,7 +29,6 @@
 -define(PROTOCOL_41, 512).
 -define(TRANSACTIONS, 8192).
 -define(SECURE_CONNECTION, 32768).
--define(CONNECT_WITH_DB, 8).
 
 -define(MAX_PACKET_SIZE, 1000000).
 
@@ -72,7 +71,7 @@ do_old_auth(Sock, RecvPid, SeqNum, User, Password, Salt1, LogFun) ->
 %%--------------------------------------------------------------------
 do_new_auth(Sock, RecvPid, SeqNum, User, Password, Salt1, Salt2, LogFun) ->
     Auth = password_new(Password, Salt1 ++ Salt2),
-    Packet2 = make_new_auth(User, Auth, none),
+    Packet2 = make_new_auth(User, Auth),
     do_send(Sock, Packet2, SeqNum, LogFun),
     case mysql_conn:do_recv(LogFun, RecvPid, SeqNum) of
 	{ok, Packet3, SeqNum2} ->
@@ -113,26 +112,14 @@ make_auth(User, Password) ->
     PasswordB/binary>>.
 
 %% part of do_new_auth/4, which is part of mysql_init/4
-make_new_auth(User, Password, Database) ->
-    DBCaps = case Database of
-		 none ->
-		     0;
-		 _ ->
-		     ?CONNECT_WITH_DB
-	     end,
+make_new_auth(User, Password) ->
     Caps = ?LONG_PASSWORD bor ?LONG_FLAG bor ?TRANSACTIONS bor
-	?PROTOCOL_41 bor ?SECURE_CONNECTION bor DBCaps,
+	?PROTOCOL_41 bor ?SECURE_CONNECTION,
     Maxsize = ?MAX_PACKET_SIZE,
     UserB = list_to_binary(User),
     PasswordL = size(Password),
-    DatabaseB = case Database of
-		    none ->
-			<<>>;
-		    _ ->
-			list_to_binary(Database)
-		end,
     <<Caps:32/little, Maxsize:32/little, 8:8, 0:23/integer-unit:8,
-    UserB/binary, 0:8, PasswordL:8, Password/binary, DatabaseB/binary>>.
+    UserB/binary, 0:8, PasswordL:8, Password/binary>>.
 
 hash(S) ->
     hash(S, 1345345333, 305419889, 7).
