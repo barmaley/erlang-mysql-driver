@@ -1,5 +1,7 @@
 all:
-	./rebar compile
+	@./rebar compile
 
 clean:
-	./rebar clean
+	@./rebar clean
+
+.PHONY: all clean
