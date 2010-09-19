@@ -54,7 +54,7 @@
 %%%          FieldInfo = mysql:get_result_field_info(MysqlRes)
 %%%          AllRows   = mysql:get_result_rows(MysqlRes)
 %%%         with FieldInfo = list() of {Table, Field, Length, Name}
-%%%          and AllRows   = list() of list() representing records
+%%%          and AllRows   = list() of tuple() representing records
 %%%     - on update:
 %%%          Affected  = mysql:get_result_affected_rows(MysqlRes)
 %%%         with Affected  = integer()
