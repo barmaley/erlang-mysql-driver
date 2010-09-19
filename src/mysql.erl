@@ -200,8 +200,11 @@ log(Module, Line, _Level, FormatFun) ->
 start_link(PoolId, Host, User, Password, Database) ->
     start_link(PoolId, Host, ?PORT, User, Password, Database).
 
-start_link(PoolId, Host, Port, User, Password, Database) ->
+start_link(PoolId, Host, Port, User, Password, Database) when is_integer(Port) ->
     start_link(PoolId, Host, Port, User, Password, Database, undefined,
+	       undefined);
+start_link(PoolId, Host, User, Password, Database, LogFun) ->
+    start_link(PoolId, Host, ?PORT, User, Password, Database, LogFun,
 	       undefined).
 
 start_link(PoolId, Host, undefined, User, Password, Database, LogFun) ->
@@ -224,11 +227,13 @@ start_link(PoolId, Host, Port, User, Password, Database, LogFun, Encoding) ->
 start(PoolId, Host, User, Password, Database) ->
     start(PoolId, Host, ?PORT, User, Password, Database).
 
-start(PoolId, Host, Port, User, Password, Database) ->
-    start(PoolId, Host, Port, User, Password, Database, undefined).
+start(PoolId, Host, Port, User, Password, Database) when is_integer(Port) ->
+    start(PoolId, Host, Port, User, Password, Database, undefined, undefined);
+start(PoolId, Host, User, Password, Database, LogFun) ->
+    start(PoolId, Host, ?PORT, User, Password, Database, LogFun, undefined).
 
 start(PoolId, Host, undefined, User, Password, Database, LogFun) ->
-    start(PoolId, Host, ?PORT, User, Password, Database, LogFun);
+    start(PoolId, Host, ?PORT, User, Password, Database, LogFun, undefined);
 start(PoolId, Host, Port, User, Password, Database, LogFun) ->
     start(PoolId, Host, Port, User, Password, Database, LogFun, undefined).
 
