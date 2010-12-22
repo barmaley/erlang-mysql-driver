@@ -3,12 +3,9 @@
 %% for license see COPYING
 
 -module(mysql_test).
--compile(export_all).
+-export([test/0]).
 
 test() ->
-    compile:file("/usr/local/lib/erlang/lib/mysql/mysql.erl"),
-    compile:file("/usr/local/lib/erlang/lib/mysql/mysql_conn.erl"),
-    
     %% Start the MySQL dispatcher and create the first connection
     %% to the database. 'p1' is the connection pool identifier.
     mysql:start_link(p1, "localhost", "root", "password", "test"),
