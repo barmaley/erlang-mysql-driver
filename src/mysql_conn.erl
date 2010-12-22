@@ -77,7 +77,8 @@
 	 execute/5,
 	 execute/6,
 	 transaction/3,
-	 transaction/4
+	 transaction/4,
+	 quit/2
 	]).
 
 %% private exports to be called only from the 'mysql' module
@@ -108,6 +109,7 @@
 	 }).
 
 -define(SECURE_CONNECTION, 32768).
+-define(MYSQL_QUIT_OP, 1).
 -define(MYSQL_QUERY_OP, 3).
 -define(DEFAULT_STANDALONE_TIMEOUT, 5000).
 -define(MYSQL_4_0, 40). %% Support for MySQL 4.0.x
@@ -208,6 +210,9 @@ post_start(Pid, LogFun) ->
 %%           Rows      = list() of [string()]
 %%           Reason    = term()
 %%--------------------------------------------------------------------
+quit(Pid, From) ->
+    send_msg(Pid, {quit, From}, From, ?DEFAULT_STANDALONE_TIMEOUT).
+
 fetch(Pid, Queries, From) ->
     fetch(Pid, Queries, From, ?DEFAULT_STANDALONE_TIMEOUT).
 
@@ -284,7 +289,9 @@ do_fetch(Pid, Queries, From, Timeout) ->
 
 send_msg(Pid, Msg, From, Timeout) ->
     Self = self(),
-    Pid ! Msg,
+
+	try Pid ! Msg catch error:badarg -> {error, connection_died} end,
+
     case From of
 	Self ->
 	    %% We are not using a mysql_dispatcher, await the response
@@ -354,8 +361,8 @@ init(Host, Port, User, Password, Database, LogFun, Encoding, PoolId, Parent) ->
 					  },
 			    loop(State)
 		    end;
-		{error, _Reason} ->
-		    Parent ! {mysql_conn, self(), {error, login_failed}}
+		{error, Reason} ->
+			Parent ! {mysql_conn, self(), {error, Reason}}
 	    end;
 	E ->
 	    ?Log2(LogFun, error,
@@ -375,6 +382,9 @@ loop(State) ->
     RecvPid = State#state.recv_pid,
     LogFun = State#state.log_fun,
     receive
+	{quit, From} ->
+		send_reply(From, do_quit(State));
+		%loop(State);
 	{fetch, Queries, From} ->
 	    send_reply(From, do_queries(State, Queries)),
 	    loop(State);
@@ -419,6 +429,25 @@ send_reply(GenSrvFrom, Res) when is_pid(GenSrvFrom) ->
     GenSrvFrom ! {fetch_result, self(), Res};
 send_reply(GenSrvFrom, Res) ->
     gen_server:reply(GenSrvFrom, Res).
+
+do_quit(State) ->
+    do_quit(State#state.socket,
+	       State#state.recv_pid,
+	       State#state.log_fun
+	      ).
+
+do_quit(Sock, RecvPid, LogFun) ->
+    ?Log2(LogFun, debug, "do_quit (id ~p)", [RecvPid]),
+    Packet =  <<?MYSQL_QUIT_OP>>,
+    case do_send(Sock, Packet, 0, LogFun) of
+	ok ->
+		ok;
+	{error, Reason} ->
+	    Msg = io_lib:format("Failed sending QUIT "
+				"on socket : ~p",
+				[Reason]),
+	    {error, Msg}
+    end.
 
 do_query(State, Query) ->
     do_query(State#state.socket,
@@ -582,7 +611,10 @@ atom_to_binary(Val) ->
 mysql_init(Sock, RecvPid, User, Password, LogFun) ->
     case do_recv(LogFun, RecvPid, undefined) of
 	{ok, Packet, InitSeqNum} ->
-	    {Version, Salt1, Salt2, Caps} = greeting(Packet, LogFun),
+		case greeting(Packet, LogFun) of
+		{error, Reason} ->
+			{error, Reason} ;
+		{ok, Version, Salt1, Salt2, Caps} ->
 	    AuthRes =
 		case Caps band ?SECURE_CONNECTION of
 		    ?SECURE_CONNECTION ->
@@ -610,12 +642,16 @@ mysql_init(Sock, RecvPid, User, Password, LogFun) ->
 		    ?Log2(LogFun, error,
 			  "init failed receiving data : ~p", [Reason]),
 		    {error, Reason}
+			end
 	    end;
 	{error, Reason} ->
 	    {error, Reason}
     end.
 
 %% part of mysql_init/4
+greeting(<<255:8, ErrCode:16/little, ErrMessage/binary>>, LogFun) ->
+	?Log2(LogFun, error, "init failed ~p: ~p", [ErrCode, binary_to_list(ErrMessage)]),
+	{error, binary_to_list(ErrMessage)} ;
 greeting(Packet, LogFun) ->
     <<Protocol:8, Rest/binary>> = Packet,
     {Version, Rest2} = asciz(Rest),
@@ -628,11 +664,16 @@ greeting(Packet, LogFun) ->
 	  "greeting version ~p (protocol ~p) salt ~p caps ~p serverchar ~p"
 	  "salt2 ~p",
 	  [Version, Protocol, Salt, Caps, ServerChar, Salt2]),
-    {normalize_version(Version, LogFun), Salt, Salt2, Caps}.
+	{ok, normalize_version(Version, LogFun), Salt, Salt2, Caps}.
 
 %% part of greeting/2
-asciz(Data) ->
-    mysql:asciz_binary(Data, []).
+asciz(Data) when is_binary(Data) ->
+    mysql:asciz_binary(Data, []);
+asciz(Data) when is_list(Data) ->
+    {String, [0 | Rest]} = lists:splitwith(fun (C) ->
+						   C /= 0
+					   end, Data),
+    {String, Rest}.
 
 %%--------------------------------------------------------------------
 %% Function: get_query_response(LogFun, RecvPid)
@@ -650,12 +691,14 @@ asciz(Data) ->
 %%--------------------------------------------------------------------
 get_query_response(LogFun, RecvPid, Version) ->
     case do_recv(LogFun, RecvPid, undefined) of
-	{ok, <<Fieldcount:8, Rest/binary>>, _} ->
+	{ok, Packet, _} ->
+	    {Fieldcount, Rest} = get_lcb(Packet),
 	    case Fieldcount of
 		0 ->
 		    %% No Tabular data
-		    <<AffectedRows:8, _Rest2/binary>> = Rest,
-		    {updated, #mysql_result{affectedrows=AffectedRows}};
+		    {AffectedRows, Rest2} = get_lcb(Rest),
+		    {InsertId, _} = get_lcb(Rest2),
+		    {updated, #mysql_result{affectedrows=AffectedRows, insertid=InsertId}};
 		255 ->
 		    <<_Code:16/little, Message/binary>>  = Rest,
 		    {error, #mysql_result{error=Message}};
@@ -789,17 +832,24 @@ get_row([Field | OtherFields], Data, Res) ->
 	   end,
     get_row(OtherFields, Rest, [This | Res]).
 
-get_with_length(<<251:8, Rest/binary>>) ->
-    {null, Rest};
-get_with_length(<<252:8, Length:16/little, Rest/binary>>) ->
-    split_binary(Rest, Length);
-get_with_length(<<253:8, Length:24/little, Rest/binary>>) ->
-    split_binary(Rest, Length);
-get_with_length(<<254:8, Length:64/little, Rest/binary>>) ->
-    split_binary(Rest, Length);
-get_with_length(<<Length:8, Rest/binary>>) when Length < 251 ->
-    split_binary(Rest, Length).
+get_with_length(Bin) when is_binary(Bin) ->
+    case get_lcb(Bin) of
+    {null, Rest} -> {null, Rest};
+    {Length, Rest} -> split_binary(Rest, Length)
+    end.
 
+get_lcb(<<251:8, Rest/binary>>) ->
+    {null, Rest};
+get_lcb(<<252:8, Value:16/little, Rest/binary>>) ->
+    {Value, Rest};
+get_lcb(<<253:8, Value:24/little, Rest/binary>>) ->
+    {Value, Rest};
+get_lcb(<<254:8, Value:32/little, Rest/binary>>) ->
+    {Value, Rest};
+get_lcb(<<Value:8, Rest/binary>>) when Value < 251 ->
+    {Value, Rest};
+get_lcb(<<255:8, Rest/binary>>) ->
+    {255, Rest}.
 
 %%--------------------------------------------------------------------
 %% Function: do_send(Sock, Packet, SeqNum, LogFun)
