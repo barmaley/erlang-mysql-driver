@@ -35,10 +35,10 @@
 	]).
 
 -record(state, {
-	  socket,
-	  parent,
-	  log_fun,
-	  data
+	  socket   :: port(),
+	  parent   :: pid(),
+	  log_fun  :: undefined | fun((atom(), pos_integer(), atom(), term()) -> _),
+	  data     :: binary()
 	 }).
 
 -define(SECURE_CONNECTION, 32768).

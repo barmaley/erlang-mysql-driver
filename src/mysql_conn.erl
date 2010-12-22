@@ -95,17 +95,17 @@
 
 -include("mysql.hrl").
 -record(state, {
-	  mysql_version,
-	  log_fun,
-	  recv_pid,
-	  socket,
-	  data,
+	  mysql_version  :: string(),
+	  log_fun        :: undefined | fun((atom(), pos_integer(), atom(), term()) -> _),
+	  recv_pid       :: pid(),
+	  socket         :: port(),
+	  data           :: binary(),
 
 	  %% maps statement names to their versions
-	  prepares = gb_trees:empty(),
+	  prepares = gb_trees:empty() :: gb_tree(),
 
 	  %% the id of the connection pool to which this connection belongs
-	  pool_id
+	  pool_id :: atom()
 	 }).
 
 -define(SECURE_CONNECTION, 32768).

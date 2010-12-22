@@ -111,7 +111,6 @@
 	 get_result_rows/1,
 	 get_result_affected_rows/1,
 	 get_result_reason/1,
-	 get_result_insert_id/1,
 
 	 encode/1,
 	 encode/2,
@@ -135,34 +134,34 @@
 -include("mysql.hrl").
 
 -record(conn, {
-	  pool_id,      %% atom(), the pool's id
-	  pid,          %% pid(), mysql_conn process	 
-	  reconnect,	%% true | false, should mysql_dispatcher try
-                        %% to reconnect if this connection dies?
-	  host,		%% string()
-	  port,		%% integer()
-	  user,		%% string()
-	  password,	%% string()
-	  database,	%% string()
-	  encoding
+	  pool_id    :: atom(),    %% the pool's id
+	  pid        :: pid(),     %% mysql_conn process	 
+	  reconnect  :: boolean(), %% should mysql_dispatcher try
+                             %% to reconnect if this connection dies?
+	  host       :: string(),
+	  port       :: 1..65535,
+	  user       :: string(),
+	  password   :: string(),
+	  database   :: string(),
+	  encoding   :: atom()
 	 }).
 
 -record(state, {
 	  %% gb_tree mapping connection
 	  %% pool id to a connection pool tuple
-	  conn_pools = gb_trees:empty(), 
+	  conn_pools = gb_trees:empty() :: gb_tree(), 
 	                
 
 	  %% gb_tree mapping connection Pid
 	  %% to pool id
-	  pids_pools = gb_trees:empty(), 
+	  pids_pools = gb_trees:empty() :: gb_tree(),
 	                                 
 	  %% function for logging,
-	  log_fun,	
+	  log_fun :: undefined | fun((atom(), pos_integer(), term()) -> _),
 
 
 	  %% maps names to {Statement::binary(), Version::integer()} values
-	  prepares = gb_trees:empty()
+	  prepares = gb_trees:empty() :: gb_tree()
 	 }).
 
 %% Macros
@@ -488,14 +487,6 @@ get_result_affected_rows(#mysql_result{affectedrows=AffectedRows}) ->
 %%    Reason::string()
 get_result_reason(#mysql_result{error=Reason}) ->
     Reason.
-
-%% @doc Extract the Insert Id from MySQL Result on update
-%%
-%% @spec get_result_insert_id(MySQLRes::mysql_result()) ->
-%%           InsertId::integer()
-get_result_insert_id(#mysql_result{insertid=InsertId}) ->
-    InsertId.
-
 
 connect(PoolId, Host, undefined, User, Password, Database, Reconnect) ->
     connect(PoolId, Host, ?PORT, User, Password, Database, undefined,
