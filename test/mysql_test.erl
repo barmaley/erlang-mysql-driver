@@ -49,7 +49,7 @@ test() ->
     
     mysql:prepare(delete_all, <<"DELETE FROM developer">>),
 
-    {error, foo} = mysql:transaction(
+    {aborted, {{error, foo}, _}} = mysql:transaction(
 		     p1,
 		     fun() -> mysql:execute(delete_all),
 			      throw({error, foo})
