@@ -19,4 +19,7 @@ buildplt:
 xref:
 	@./rebar xref
 
+doc:
+	erl -eval 'edoc:application (mysql_driver, ".", [])' -noshell -s init stop
+
 .PHONY: all clean analyze checkplt buildplt xref
