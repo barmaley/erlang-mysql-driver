@@ -202,10 +202,12 @@ start_link(PoolId, Host, User, Password, Database) ->
 %% @spec start_link(PoolId::atom(), Host::string(), Port::integer(),
 %%   Username::string(), Password::string(), Database::string()) ->
 %%     {ok, Pid} | ignore | {error, Err}
-start_link(PoolId, Host, Port, User, Password, Database) ->
+start_link(PoolId, Host, Port, User, Password, Database)
+  when is_list(Database), is_integer(Port) ->
     start_link(PoolId, Host, Port, User, Password, Database, undefined,
 	       undefined);
-start_link(PoolId, Host, User, Password, Database, LogFun) ->
+start_link(PoolId, Host, User, Password, Database, LogFun)
+  when is_function(LogFun, 4), is_list(User) ->
     start_link(PoolId, Host, ?PORT, User, Password, Database, LogFun,
 	       undefined).
 
