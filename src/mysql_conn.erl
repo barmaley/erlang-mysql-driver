@@ -275,8 +275,8 @@ do_recv(LogFun, RecvPid, SeqNum) when is_function(LogFun);
     receive
         {mysql_recv, RecvPid, data, Packet, ResponseNum} ->
 	    {ok, Packet, ResponseNum};
-	{mysql_recv, RecvPid, closed, _E} ->
-	    {error, io_lib:format("mysql_recv: socket was closed", [_E])}
+	{mysql_recv, RecvPid, closed, _} ->
+	    {error, io_lib:format("mysql_recv: socket was closed", [])}
     end.
 
 do_fetch(Pid, Queries, From, Timeout) ->
