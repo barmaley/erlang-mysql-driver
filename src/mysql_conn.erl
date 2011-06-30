@@ -177,8 +177,8 @@ post_start(Pid, LogFun) ->
 	    post_start(Pid, LogFun);
 	Unknown ->
 	    ?Log2(LogFun, error,
-		 "received unknown signal, exiting: ~p", [Unknown]),
-	    {error, "unknown signal received"}
+		 "received unknown signal: ~p", [Unknown]),
+		 post_start(Pid, LogFun)
     after 5000 ->
 	    {error, "timed out"}
     end.
@@ -271,7 +271,7 @@ do_recv(LogFun, RecvPid, SeqNum)  when is_function(LogFun);
         {mysql_recv, RecvPid, data, Packet, Num} ->
 	    {ok, Packet, Num};
 	{mysql_recv, RecvPid, closed, _E} ->
-	    {error, "mysql_recv: socket was closed"}
+	    {error, io_lib:format("mysql_recv: socket was closed ~p", [_E])}
     end;
 do_recv(LogFun, RecvPid, SeqNum) when is_function(LogFun);
 				      LogFun == undefined,
@@ -280,8 +280,8 @@ do_recv(LogFun, RecvPid, SeqNum) when is_function(LogFun);
     receive
         {mysql_recv, RecvPid, data, Packet, ResponseNum} ->
 	    {ok, Packet, ResponseNum};
-	{mysql_recv, RecvPid, closed, _E} ->
-	    {error, "mysql_recv: socket was closed"}
+	{mysql_recv, RecvPid, closed, _} ->
+	    {error, io_lib:format("mysql_recv: socket was closed", [])}
     end.
 
 do_fetch(Pid, Queries, From, Timeout) ->

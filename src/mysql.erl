@@ -515,11 +515,20 @@ init([PoolId, Host, Port, User, Password, Database, LogFun, Encoding]) ->
 			    Database, Encoding),
 	    State = #state{log_fun = LogFun1},
 	    {ok, add_conn(Conn, State)};
-	{error, Reason} ->
+	{error, _Reason} ->
 	    ?Log(LogFun1, error,
 		 "failed starting first MySQL connection handler, "
 		 "exiting"),
-	    {stop, {error, Reason}}
+		 C = #conn{pool_id = PoolId,
+		  reconnect = true,
+		  host = Host,
+		  port = Port,
+		  user = User,
+		  password = Password,
+		  database = Database,
+		  encoding = Encoding},
+		  start_reconnect(C, LogFun),
+	    {ok, #state{log_fun = LogFun1}}
     end.
 
 handle_call({fetch, PoolId, Query}, From, State) ->
@@ -747,6 +756,7 @@ get_next_conn(PoolId, State) ->
 
 start_reconnect(Conn, LogFun) ->
     Pid = spawn(fun () ->
+      process_flag(trap_exit, true),
 			reconnect_loop(Conn#conn{pid = undefined}, LogFun, 0)
 		end),
     {PoolId, Host, Port} = {Conn#conn.pool_id, Conn#conn.host, Conn#conn.port},
@@ -773,17 +783,17 @@ reconnect_loop(Conn, LogFun, N) ->
 	    ok;
 	{error, Reason} ->
 	    %% log every once in a while
-	    NewN = case N of
-		       10 ->
-			   ?Log2(LogFun, debug,
-			       "reconnect: still unable to connect to "
-			       "~p:~s:~p (~p)", [PoolId, Host, Port, Reason]),
-			   0;
-		       _ ->
-			   N + 1
-		   end,
+      NewN = case N of
+                 1 ->
+               ?Log2(LogFun, debug,
+                   "reconnect: still unable to connect to "
+                   "~p:~s:~p (~p)", [PoolId, Host, Port, Reason]),
+               0;
+                 _ ->
+               N + 1
+             end,
 	    %% sleep between every unsuccessful attempt
-	    timer:sleep(5 * 1000),
+	    timer:sleep(5000),
 	    reconnect_loop(Conn, LogFun, NewN)
     end.
 
